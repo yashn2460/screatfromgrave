@@ -5,6 +5,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
 const path = require('path');
+const { createSuperAdminIfNeeded } = require('./utils/superAdminSetup');
 
 const app = express();
 
@@ -38,8 +39,12 @@ app.get('/api-docs', swaggerUi.setup(swaggerSpecs));
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/afternote';
 
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('Connected to MongoDB successfully');
+    
+    // Create super admin if no admin exists
+    console.log('Checking for existing admins...');
+    await createSuperAdminIfNeeded();
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error);
@@ -47,11 +52,17 @@ mongoose.connect(MONGODB_URI)
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const adminDashboardRoutes = require('./routes/adminDashboardRoutes');
+const adminManagementRoutes = require('./routes/adminManagementRoutes');
 const videoMessageRoutes = require('./routes/videoMessageRoutes');
 const recipientRoutes = require('./routes/recipientRoutes');
 const trustedContactRoutes = require('./routes/trustedContactRoutes');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
+app.use('/api/admin', adminManagementRoutes);
 app.use('/api/video-messages', videoMessageRoutes);
 app.use('/api/recipients', recipientRoutes);
 app.use('/api/trusted-contacts', trustedContactRoutes);
