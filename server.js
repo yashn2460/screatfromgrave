@@ -58,6 +58,7 @@ const adminManagementRoutes = require('./routes/adminManagementRoutes');
 const videoMessageRoutes = require('./routes/videoMessageRoutes');
 const recipientRoutes = require('./routes/recipientRoutes');
 const trustedContactRoutes = require('./routes/trustedContactRoutes');
+const trusteeRoutes = require('./routes/trusteeRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -66,6 +67,7 @@ app.use('/api/admin', adminManagementRoutes);
 app.use('/api/video-messages', videoMessageRoutes);
 app.use('/api/recipients', recipientRoutes);
 app.use('/api/trusted-contacts', trustedContactRoutes);
+app.use('/api/trustees', trusteeRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
