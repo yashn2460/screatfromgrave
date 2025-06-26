@@ -5,9 +5,10 @@ const {
   getAllVideoMessages,
   getAllRecipients,
   getAllTrustedContacts,
-  getUserDetails
+  getUserDetails,
+  triggerDeathVerificationCron
 } = require('../controllers/adminManagementController');
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateToken, isAdmin } = require('../middleware/authMiddleware');
 
 /**
  * @swagger
@@ -754,5 +755,34 @@ router.get('/trusted-contacts', authenticateToken, getAllTrustedContacts);
  *         description: Server error
  */
 router.get('/users/:userId', authenticateToken, getUserDetails);
+
+/**
+ * @swagger
+ * /api/admin/trigger-death-verification:
+ *   post:
+ *     summary: Manually trigger death verification cron job
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Death verification cron job triggered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.post('/trigger-death-verification', authenticateToken, isAdmin, triggerDeathVerificationCron);
 
 module.exports = router; 

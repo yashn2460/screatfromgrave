@@ -1,4 +1,5 @@
 const { verifyToken } = require('../utils/jwtUtils');
+const Admin = require('../models/Admin');
 
 const authenticateToken = (req, res, next) => {
   try {
@@ -23,6 +24,28 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+const isAdmin = async (req, res, next) => {
+  try {
+    // Check if user exists in Admin collection
+    const admin = await Admin.findOne({ email: req.user.email });
+    
+    if (!admin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking admin privileges'
+    });
+  }
+};
+
 module.exports = {
-  authenticateToken
+  authenticateToken,
+  isAdmin
 }; 

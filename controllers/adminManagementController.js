@@ -2,6 +2,7 @@ const User = require('../models/User');
 const VideoMessage = require('../models/VideoMessage');
 const Recipient = require('../models/Recipient');
 const TrustedContact = require('../models/TrustedContact');
+const { triggerScheduledVerifications } = require('../utils/cronJobs');
 
 // Get All Users (Admin)
 const getAllUsers = async (req, res) => {
@@ -515,10 +516,30 @@ const getUserDetails = async (req, res) => {
   }
 };
 
+// Manual trigger for death verification cron job
+const triggerDeathVerificationCron = async (req, res) => {
+  try {
+    await triggerScheduledVerifications();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Death verification cron job triggered successfully'
+    });
+  } catch (error) {
+    console.error('Trigger death verification cron error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering death verification cron job',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getAllVideoMessages,
   getAllRecipients,
   getAllTrustedContacts,
-  getUserDetails
+  getUserDetails,
+  triggerDeathVerificationCron
 }; 

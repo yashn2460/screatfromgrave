@@ -23,6 +23,7 @@ bin/
 # Dependency directories
 node_modules/
 vendor/
+uploads/
 
 # Logs and databases
 *.log
