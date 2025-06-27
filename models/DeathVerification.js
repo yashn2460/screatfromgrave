@@ -23,7 +23,7 @@ const deathVerificationSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'verified', 'rejected', 'expired'],
+    enum: ['pending', 'verified', 'waiting_for_release', 'rejected', 'expired'],
     default: 'pending'
   },
   verification_date: {

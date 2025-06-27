@@ -39,6 +39,48 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *                     type: string
  *                   lastLogin:
  *                     type: string
+ *                   deathVerification:
+ *                     type: object
+ *                     nullable: true
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [pending, waiting_for_release, verified]
+ *                       deathDate:
+ *                         type: string
+ *                         format: date
+ *                       verificationDate:
+ *                         type: string
+ *                         format: date
+ *                       verifiedTrustees:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             trustee_id:
+ *                               type: object
+ *                               properties:
+ *                                 full_name:
+ *                                   type: string
+ *                                 email:
+ *                                   type: string
+ *                             verification_date:
+ *                               type: string
+ *                               format: date
+ *                             verification_notes:
+ *                               type: string
+ *                             verification_method:
+ *                               type: string
+ *                             place_of_death:
+ *                               type: string
+ *                       requiredTrustees:
+ *                         type: number
+ *                       verificationMethod:
+ *                         type: string
+ *                       placeOfDeath:
+ *                         type: string
  *       401:
  *         description: Unauthorized - Invalid or missing token
  *       500:

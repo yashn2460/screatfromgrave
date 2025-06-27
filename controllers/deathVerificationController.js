@@ -3,6 +3,7 @@ const TrustedContact = require('../models/TrustedContact');
 const VideoMessage = require('../models/VideoMessage');
 const User = require('../models/User');
 const { notifyAllRecipients } = require('../utils/emailService');
+const { normalizeFilePath } = require('../utils/fileUtils');
 
 // Trustee verifies death
 const verifyDeath = async (req, res) => {
@@ -50,8 +51,9 @@ const verifyDeath = async (req, res) => {
     // Handle file upload for death certificate
     let deathCertificateUrl = null;
     if (req.file) {
-      // File upload handling - you may want to integrate with your S3 or file storage service
-      deathCertificateUrl = req.file.path || req.file.filename;
+      // Normalize file path to use forward slashes for web URLs
+      const filePath = req.file.path || req.file.filename;
+      deathCertificateUrl = normalizeFilePath(filePath);
     }
 
     // Check if death verification already exists
@@ -89,19 +91,18 @@ const verifyDeath = async (req, res) => {
     }
 
     // Check if enough trustees have verified
-    // if (deathVerification.verified_trustees.length >= deathVerification.required_trustees) {
-    //   deathVerification.status = 'verified';
-    //   deathVerification.verification_date = new Date();
-      
-    //   // Release video messages
-    //   await releaseVideoMessages(userId);
-    // }
-    await releaseVideoMessages(userId);
+    if (deathVerification.verified_trustees.length >= deathVerification.required_trustees) {
+      deathVerification.status = 'waiting_for_release';
+      deathVerification.verification_date = new Date();
+    }
+    
     await deathVerification.save();
 
     res.status(200).json({
       success: true,
-      message: 'Death verification submitted successfully',
+      message: deathVerification.status === 'waiting_for_release' 
+        ? 'Death verification completed. Video messages are waiting for release.' 
+        : 'Death verification submitted successfully. Waiting for additional trustee verification.',
       deathVerification: {
         id: deathVerification._id,
         status: deathVerification.status,
@@ -130,7 +131,7 @@ const getDeathVerificationStatus = async (req, res) => {
 
     const deathVerification = await DeathVerification.findOne({
       user_id: userId,
-      status: { $in: ['pending', 'verified'] }
+      status: { $in: ['pending', 'waiting_for_release', 'verified'] }
     }).populate('verified_trustees.trustee_id', 'full_name email');
 
     if (!deathVerification) {
@@ -178,7 +179,7 @@ const getPendingVerifications = async (req, res) => {
 
     const pendingVerifications = await DeathVerification.find({
       user_id: { $in: userIds },
-      status: 'pending'
+      status: { $in: ['pending', 'waiting_for_release'] }
     }).populate('user_id', 'name email')
       .populate('verified_trustees.trustee_id', 'full_name email');
 
@@ -252,8 +253,67 @@ const scheduleDeathVerification = async (req, res) => {
   }
 };
 
+// Release video messages after death verification
+const releaseVideoMessages = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const trusteeId = req.user.id;
+
+    // Check if trustee has permission to release messages
+    const trustee = await TrustedContact.findOne({
+      user_id: userId,
+      email: req.user.email
+    });
+
+    if (!trustee || !trustee.permissions.can_verify_death) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to release video messages for this user'
+      });
+    }
+
+    // Check if death verification is in waiting_for_release status
+    const deathVerification = await DeathVerification.findOne({
+      user_id: userId,
+      status: 'waiting_for_release'
+    });
+
+    if (!deathVerification) {
+      return res.status(400).json({
+        success: false,
+        message: 'No death verification found in waiting for release status'
+      });
+    }
+
+    // Update status to verified and release video messages
+    deathVerification.status = 'verified';
+    await deathVerification.save();
+
+    // Release video messages
+    await releaseVideoMessagesHelper(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Video messages released successfully',
+      deathVerification: {
+        id: deathVerification._id,
+        status: deathVerification.status,
+        verificationDate: deathVerification.verification_date
+      }
+    });
+
+  } catch (error) {
+    console.error('Release video messages error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error releasing video messages',
+      error: error.message
+    });
+  }
+};
+
 // Helper function to release video messages
-const releaseVideoMessages = async (userId) => {
+const releaseVideoMessagesHelper = async (userId) => {
   try {
     const videoMessages = await VideoMessage.find({
       user_id: userId,
@@ -311,7 +371,7 @@ const processScheduledVerifications = async () => {
         await verification.save();
 
         // Release video messages and send emails
-        await releaseVideoMessages(verification.user_id);
+        await releaseVideoMessagesHelper(verification.user_id);
 
         console.log(`Auto-verified death for user ${verification.user_id}`);
       }
@@ -373,5 +433,6 @@ module.exports = {
   getPendingVerifications,
   scheduleDeathVerification,
   processScheduledVerifications,
-  triggerEmailNotifications
+  triggerEmailNotifications,
+  releaseVideoMessages
 }; 

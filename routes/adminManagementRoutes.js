@@ -6,7 +6,9 @@ const {
   getAllRecipients,
   getAllTrustedContacts,
   getUserDetails,
-  triggerDeathVerificationCron
+  triggerDeathVerificationCron,
+  releaseVideoMessages,
+  getAllDeathVerifications
 } = require('../controllers/adminManagementController');
 const { authenticateToken, isAdmin } = require('../middleware/authMiddleware');
 
@@ -784,5 +786,252 @@ router.get('/users/:userId', authenticateToken, getUserDetails);
  *         description: Server error
  */
 router.post('/trigger-death-verification', authenticateToken, isAdmin, triggerDeathVerificationCron);
+
+/**
+ * @swagger
+ * /api/admin/death-verifications:
+ *   get:
+ *     summary: Get all death verifications with pagination, search, and filters
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: string
+ *           default: "1"
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: string
+ *           default: "20"
+ *         description: Number of verifications per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term for verification notes or place of death
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: "createdAt"
+ *           enum: [createdAt, death_date, verification_date, status]
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           default: "desc"
+ *           enum: [asc, desc]
+ *         description: Sort order
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, waiting_for_release, verified, rejected, expired]
+ *         description: Filter by verification status
+ *       - in: query
+ *         name: verificationMethod
+ *         schema:
+ *           type: string
+ *           enum: [death_certificate, medical_report, official_document, other]
+ *         description: Filter by verification method
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         description: Filter by user ID
+ *     responses:
+ *       200:
+ *         description: Death verifications retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 deathVerifications:
+ *                   type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           user_id:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                               givenName:
+ *                                 type: string
+ *                               familyName:
+ *                                 type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [pending, waiting_for_release, verified, rejected, expired]
+ *                           death_date:
+ *                             type: string
+ *                             format: date
+ *                           verification_date:
+ *                             type: string
+ *                             format: date
+ *                           verification_method:
+ *                             type: string
+ *                           place_of_death:
+ *                             type: string
+ *                           verification_notes:
+ *                             type: string
+ *                           death_certificate_url:
+ *                             type: string
+ *                           death_certificate_url_full:
+ *                             type: string
+ *                             description: Full URL to access the death certificate file
+ *                           required_trustees:
+ *                             type: number
+ *                           verified_trustees:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 trustee_id:
+ *                                   type: object
+ *                                   properties:
+ *                                     full_name:
+ *                                       type: string
+ *                                     email:
+ *                                       type: string
+ *                                 verification_date:
+ *                                   type: string
+ *                                   format: date
+ *                                 verification_notes:
+ *                                   type: string
+ *                                 verification_method:
+ *                                   type: string
+ *                                 place_of_death:
+ *                                   type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         currentPage:
+ *                           type: number
+ *                         totalPages:
+ *                           type: number
+ *                         totalVerifications:
+ *                           type: number
+ *                         hasNext:
+ *                           type: boolean
+ *                         hasPrev:
+ *                           type: boolean
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalVerifications:
+ *                       type: number
+ *                     pending:
+ *                       type: number
+ *                     waitingForRelease:
+ *                       type: number
+ *                     verified:
+ *                       type: number
+ *                     rejected:
+ *                       type: number
+ *                     expired:
+ *                       type: number
+ *                     methodDistribution:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           count:
+ *                             type: number
+ *                     recentActivity:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           count:
+ *                             type: number
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/death-verifications', authenticateToken, isAdmin, getAllDeathVerifications);
+
+/**
+ * @swagger
+ * /api/admin/release-videos/{userId}:
+ *   post:
+ *     summary: Release video messages after death verification (Admin only)
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the user whose video messages should be released
+ *     responses:
+ *       200:
+ *         description: Video messages released successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deathVerification:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     verificationDate:
+ *                       type: string
+ *                       format: date
+ *                 releasedVideos:
+ *                   type: number
+ *                   description: Number of videos released
+ *       400:
+ *         description: No death verification found in waiting for release status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/release-videos/:userId', authenticateToken, isAdmin, releaseVideoMessages);
 
 module.exports = router; 

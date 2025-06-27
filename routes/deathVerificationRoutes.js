@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { verifyDeath, getDeathVerificationStatus, getPendingVerifications, scheduleDeathVerification, triggerEmailNotifications } = require('../controllers/deathVerificationController');
+const { verifyDeath, getDeathVerificationStatus, getPendingVerifications, scheduleDeathVerification, triggerEmailNotifications, releaseVideoMessages } = require('../controllers/deathVerificationController');
 const { authenticateToken, isAdmin } = require('../middleware/authMiddleware');
 
 // Configure multer for file uploads
@@ -53,7 +53,7 @@ const upload = multer({
  *           enum: [death_certificate, medical_report, official_document, other]
  *         status:
  *           type: string
- *           enum: [pending, verified, rejected, expired]
+ *           enum: [pending, verified, waiting_for_release, rejected, expired]
  *         death_date:
  *           type: string
  *           format: date
@@ -331,5 +331,53 @@ router.post('/schedule', authenticateToken, scheduleDeathVerification);
  *         description: Server error
  */
 router.post('/trigger-emails/:userId', authenticateToken, isAdmin, triggerEmailNotifications);
+
+/**
+ * @swagger
+ * /api/death-verification/release/{userId}:
+ *   post:
+ *     summary: Release video messages after death verification (Trustee only)
+ *     tags: [Death Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the user whose video messages should be released
+ *     responses:
+ *       200:
+ *         description: Video messages released successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deathVerification:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     verificationDate:
+ *                       type: string
+ *                       format: date
+ *       400:
+ *         description: No death verification found in waiting for release status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Trustee does not have permission
+ *       500:
+ *         description: Server error
+ */
+router.post('/release/:userId', authenticateToken, releaseVideoMessages);
 
 module.exports = router; 

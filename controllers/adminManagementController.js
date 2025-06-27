@@ -2,7 +2,10 @@ const User = require('../models/User');
 const VideoMessage = require('../models/VideoMessage');
 const Recipient = require('../models/Recipient');
 const TrustedContact = require('../models/TrustedContact');
+const DeathVerification = require('../models/DeathVerification');
 const { triggerScheduledVerifications } = require('../utils/cronJobs');
+const { notifyAllRecipients } = require('../utils/emailService');
+const { getFileUrl } = require('../utils/fileUtils');
 
 // Get All Users (Admin)
 const getAllUsers = async (req, res) => {
@@ -535,11 +538,221 @@ const triggerDeathVerificationCron = async (req, res) => {
   }
 };
 
+// Admin release video messages after death verification
+const releaseVideoMessages = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if death verification is in waiting_for_release status
+    const deathVerification = await DeathVerification.findOne({
+      user_id: userId,
+      status: 'waiting_for_release'
+    });
+
+    if (!deathVerification) {
+      return res.status(400).json({
+        success: false,
+        message: 'No death verification found in waiting for release status'
+      });
+    }
+
+    // Update status to verified and release video messages
+    deathVerification.status = 'verified';
+    await deathVerification.save();
+
+    // Release video messages
+    const videoMessages = await VideoMessage.find({
+      user_id: userId,
+      'release_conditions.type': 'death_verification'
+    });
+
+    for (const video of videoMessages) {
+      video.release_conditions.verification_required = false;
+      video.scheduled_release = new Date(); // Release immediately
+      await video.save();
+    }
+
+    console.log(`Released ${videoMessages.length} video messages for user ${userId}`);
+    
+    // Send email notifications to recipients
+    try {
+      await notifyAllRecipients(userId, user);
+      console.log(`Email notifications sent to recipients for user ${userId}`);
+    } catch (emailError) {
+      console.error(`Error sending email notifications for user ${userId}:`, emailError);
+      // Don't fail the release process if email fails
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Video messages released successfully',
+      deathVerification: {
+        id: deathVerification._id,
+        status: deathVerification.status,
+        verificationDate: deathVerification.verification_date
+      },
+      releasedVideos: videoMessages.length
+    });
+
+  } catch (error) {
+    console.error('Admin release video messages error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error releasing video messages',
+      error: error.message
+    });
+  }
+};
+
+// Get All Death Verifications (Admin)
+const getAllDeathVerifications = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      search = '', 
+      sortBy = 'createdAt', 
+      sortOrder = 'desc',
+      status,
+      verificationMethod,
+      userId
+    } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build search query
+    const searchQuery = {};
+    if (search) {
+      searchQuery.$or = [
+        { verification_notes: { $regex: search, $options: 'i' } },
+        { place_of_death: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Add filters
+    if (status) {
+      searchQuery.status = status;
+    }
+    if (verificationMethod) {
+      searchQuery.verification_method = verificationMethod;
+    }
+    if (userId) {
+      searchQuery.user_id = userId;
+    }
+
+    const deathVerifications = await DeathVerification.find(searchQuery)
+      .populate('user_id', 'name email givenName familyName')
+      .populate('verified_trustees.trustee_id', 'full_name email')
+      .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Process death verifications to add full URLs
+    const processedVerifications = deathVerifications.map(verification => {
+      const verificationObj = verification.toObject();
+      
+      // Add full URL for death certificate if it exists
+      if (verificationObj.death_certificate_url) {
+        verificationObj.death_certificate_url_full = getFileUrl(verificationObj.death_certificate_url, process.env.BASE_URL || 'http://localhost:3000');
+      }
+      
+      return verificationObj;
+    });
+
+    const totalVerifications = await DeathVerification.countDocuments(searchQuery);
+
+    // Get death verification statistics
+    const verificationStats = await DeathVerification.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalVerifications: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          waitingForRelease: { $sum: { $cond: [{ $eq: ['$status', 'waiting_for_release'] }, 1, 0] } },
+          verified: { $sum: { $cond: [{ $eq: ['$status', 'verified'] }, 1, 0] } },
+          rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
+          expired: { $sum: { $cond: [{ $eq: ['$status', 'expired'] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    // Get verification method distribution
+    const methodDistribution = await DeathVerification.aggregate([
+      {
+        $group: {
+          _id: '$verification_method',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Get recent activity (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentActivity = await DeathVerification.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: sevenDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: -1 } },
+      { $limit: 7 }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      deathVerifications: {
+        data: processedVerifications,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalVerifications / parseInt(limit)),
+          totalVerifications,
+          hasNext: skip + processedVerifications.length < totalVerifications,
+          hasPrev: parseInt(page) > 1
+        }
+      },
+      stats: {
+        ...verificationStats[0],
+        methodDistribution,
+        recentActivity
+      }
+    });
+  } catch (error) {
+    console.error('Get all death verifications error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching death verifications',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getAllVideoMessages,
   getAllRecipients,
   getAllTrustedContacts,
   getUserDetails,
-  triggerDeathVerificationCron
+  triggerDeathVerificationCron,
+  releaseVideoMessages,
+  getAllDeathVerifications
 }; 
