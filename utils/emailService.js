@@ -1,23 +1,18 @@
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Create transporter
-const createTransporter = () => {
-  // Looking to send emails in production? Check out our Email API/SMTP product!
-var transport = nodemailer.createTransport({
-  host: "sandbox.smtp.mailtrap.io",
-  port: 2525,
-  auth: {
-    user: "294b6d40e7440d",
-    pass: "07eb78e1c6bdb6"
+// Initialize SendGrid with API key
+const initializeSendGrid = () => {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    throw new Error('SENDGRID_API_KEY environment variable is required');
   }
-});
-  return transport;
+  sgMail.setApiKey(apiKey);
 };
 
 // Send death verification notification to recipients
 const sendDeathVerificationNotification = async (recipient, videoMessages, deceasedUser) => {
   try {
-    const transporter = createTransporter();
+    initializeSendGrid();
     
     // Create HTML content for the email
     const videoList = videoMessages.map(video => `
@@ -103,16 +98,16 @@ This message was sent to you because you were designated as a recipient of video
 If you believe you received this message in error, please contact us immediately.
     `;
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    const msg = {
       to: recipient.email,
+      from: process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_VERIFIED_SENDER,
       subject: `Important Message from ${deceasedUser.name} - Afternote`,
       text: textContent,
       html: htmlContent
     };
 
-    const result = await transporter.sendMail(mailOptions);
-    console.log(`Death verification notification sent to ${recipient.email}:`, result.messageId);
+    const result = await sgMail.send(msg);
+    console.log(`Death verification notification sent to ${recipient.email}:`, result[0].statusCode);
     return result;
   } catch (error) {
     console.error(`Error sending death verification notification to ${recipient.email}:`, error);
@@ -177,7 +172,7 @@ const notifySpecificRecipients = async (recipientIds, videoMessages, deceasedUse
 // Send contact form notification to admin
 const sendContactNotification = async (contact) => {
   try {
-    const transporter = createTransporter();
+    initializeSendGrid();
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -244,16 +239,16 @@ This is an automated notification from the Afternote contact form.
 Contact ID: ${contact._id}
     `;
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+    const msg = {
+      to: process.env.ADMIN_EMAIL || process.env.SENDGRID_FROM_EMAIL,
+      from: process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_VERIFIED_SENDER,
       subject: `New Contact Form Submission - ${contact.subject}`,
       text: textContent,
       html: htmlContent
     };
 
-    const result = await transporter.sendMail(mailOptions);
-    console.log(`Contact notification sent to admin:`, result.messageId);
+    const result = await sgMail.send(msg);
+    console.log(`Contact notification sent to admin:`, result[0].statusCode);
     return result;
   } catch (error) {
     console.error(`Error sending contact notification:`, error);
@@ -264,7 +259,7 @@ Contact ID: ${contact._id}
 // Send response to contact form submitter
 const sendContactResponse = async (contact, responseMessage) => {
   try {
-    const transporter = createTransporter();
+    initializeSendGrid();
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -341,16 +336,16 @@ This is a response to your contact form submission from Afternote.
 Contact ID: ${contact._id}
     `;
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    const msg = {
       to: contact.email,
+      from: process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_VERIFIED_SENDER,
       subject: `Re: ${contact.subject} - Afternote Support`,
       text: textContent,
       html: htmlContent
     };
 
-    const result = await transporter.sendMail(mailOptions);
-    console.log(`Contact response sent to ${contact.email}:`, result.messageId);
+    const result = await sgMail.send(msg);
+    console.log(`Contact response sent to ${contact.email}:`, result[0].statusCode);
     return result;
   } catch (error) {
     console.error(`Error sending contact response to ${contact.email}:`, error);
