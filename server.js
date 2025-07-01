@@ -19,6 +19,11 @@ app.use((err, req, res, next) => {
 
 // Middleware
 app.use(cors());
+
+// Special handling for Stripe webhooks - raw body
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
+// Regular JSON parsing for all other routes
 app.use(express.json());
 
 // Serve static files for uploaded death certificates
@@ -90,6 +95,7 @@ const trustedContactRoutes = require('./routes/trustedContactRoutes');
 const trusteeRoutes = require('./routes/trusteeRoutes');
 const deathVerificationRoutes = require('./routes/deathVerificationRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -101,6 +107,7 @@ app.use('/api/trusted-contacts', trustedContactRoutes);
 app.use('/api/trustees', trusteeRoutes);
 app.use('/api/death-verification', deathVerificationRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
