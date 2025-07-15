@@ -1,4 +1,9 @@
 const sgMail = require('@sendgrid/mail');
+const EmailTemplate = require('../models/EmailTemplate');
+
+// Email templates are now fetched from the database (EmailTemplate model) if available.
+// If not found, the service falls back to the hardcoded template in this file.
+// Admins can manage templates via the /admin/email-templates API.
 
 // Initialize SendGrid with API key
 const initializeSendGrid = () => {
@@ -8,6 +13,23 @@ const initializeSendGrid = () => {
   }
   sgMail.setApiKey(apiKey);
 };
+
+// Helper to get template from DB or fallback
+async function getEmailTemplateOrDefault(type, defaultSubject, defaultHtml, defaultText) {
+  try {
+    const template = await EmailTemplate.findOne({ type, isActive: true });
+    if (template) {
+      return {
+        subject: template.subject,
+        html: template.html,
+        text: template.text
+      };
+    }
+  } catch (err) {
+    console.error('Error fetching email template from DB:', err);
+  }
+  return { subject: defaultSubject, html: defaultHtml, text: defaultText };
+}
 
 // Send death verification notification to recipients
 const sendDeathVerificationNotification = async (recipient, videoMessages, deceasedUser) => {
@@ -98,12 +120,20 @@ This message was sent to you because you were designated as a recipient of video
 If you believe you received this message in error, please contact us immediately.
     `;
 
+    // Fetch template from DB or fallback
+    const template = await getEmailTemplateOrDefault(
+      'death_verification_notification',
+      `Important Message from ${deceasedUser.name} - Afternote`,
+      htmlContent,
+      textContent
+    );
+
     const msg = {
       to: recipient.email,
       from: process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_VERIFIED_SENDER,
-      subject: `Important Message from ${deceasedUser.name} - Afternote`,
-      text: textContent,
-      html: htmlContent
+      subject: template.subject,
+      text: template.text,
+      html: template.html
     };
 
     const result = await sgMail.send(msg);

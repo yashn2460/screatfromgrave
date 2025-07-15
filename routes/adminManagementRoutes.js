@@ -11,7 +11,192 @@ const {
   getAllDeathVerifications
 } = require('../controllers/adminManagementController');
 const { authenticateToken, isAdmin } = require('../middleware/authMiddleware');
+const emailTemplateController = require('../controllers/emailTemplateController');
 
+/**
+ * @swagger
+ * /api/admin/email-templates:
+ *   get:
+ *     summary: List all email templates
+ *     tags: [Admin Email Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Number of templates per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by template type
+ *     responses:
+ *       200:
+ *         description: List of email templates
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 templates:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/EmailTemplate'
+ *                 total:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ *   post:
+ *     summary: Create a new email template
+ *     tags: [Admin Email Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EmailTemplate'
+ *     responses:
+ *       201:
+ *         description: Email template created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailTemplate'
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /api/admin/email-templates/{id}:
+ *   get:
+ *     summary: Get an email template by ID
+ *     tags: [Admin Email Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The template ID
+ *     responses:
+ *       200:
+ *         description: Email template found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailTemplate'
+ *       404:
+ *         description: Not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ *   put:
+ *     summary: Update an email template by ID
+ *     tags: [Admin Email Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The template ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EmailTemplate'
+ *     responses:
+ *       200:
+ *         description: Email template updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailTemplate'
+ *       400:
+ *         description: Bad request
+ *       404:
+ *         description: Not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ *   delete:
+ *     summary: Delete an email template by ID
+ *     tags: [Admin Email Templates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The template ID
+ *     responses:
+ *       200:
+ *         description: Email template deleted
+ *       404:
+ *         description: Not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     EmailTemplate:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         type:
+ *           type: string
+ *           example: death_verification_notification
+ *         subject:
+ *           type: string
+ *           example: Important Message from John Doe - Afternote
+ *         html:
+ *           type: string
+ *           example: '<html>...</html>'
+ *         text:
+ *           type: string
+ *           example: 'Plain text version of the email.'
+ *         metadata:
+ *           type: object
+ *         isActive:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *         updatedAt:
+ *           type: string
+ */
 /**
  * @swagger
  * /api/admin/users:
@@ -1033,5 +1218,12 @@ router.get('/death-verifications', authenticateToken, isAdmin, getAllDeathVerifi
  *         description: Server error
  */
 router.post('/release-videos/:userId', authenticateToken, isAdmin, releaseVideoMessages);
+
+// Email Template Management (Admin)
+router.get('/email-templates', authenticateToken, isAdmin, emailTemplateController.listEmailTemplates);
+router.get('/email-templates/:id', authenticateToken, isAdmin, emailTemplateController.getEmailTemplate);
+router.post('/email-templates', authenticateToken, isAdmin, emailTemplateController.createEmailTemplate);
+router.put('/email-templates/:id', authenticateToken, isAdmin, emailTemplateController.updateEmailTemplate);
+router.delete('/email-templates/:id', authenticateToken, isAdmin, emailTemplateController.deleteEmailTemplate);
 
 module.exports = router; 
