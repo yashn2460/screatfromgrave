@@ -6,6 +6,15 @@ const paymentSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  recipientId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Recipient',
+    required: true
+  },
+  recipientName: {
+    type: String,
+    required: true
+  },
   stripePaymentIntentId: {
     type: String,
     required: true,

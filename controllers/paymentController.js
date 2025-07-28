@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Payment = require('../models/Payment');
 const User = require('../models/User');
+const Recipient = require('../models/Recipient');
 
 /**
  * Create a payment intent for the one-time service charge
@@ -10,12 +11,12 @@ const User = require('../models/User');
 const createPaymentIntent = async (req, res) => {
   try {
     const { id } = req.user; // From JWT token
-    const { paymentMethod } = req.body;
+    const { paymentMethod, recipientId, recipientName, amount, currency } = req.body;
 
-    if (!paymentMethod) {
+    if (!paymentMethod || !recipientId || !recipientName) {
       return res.status(400).json({
         success: false,
-        message: 'Payment method is required'
+        message: 'Payment method, recipientId, and recipientName are required'
       });
     }
 
@@ -28,49 +29,78 @@ const createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Check if user has already made a successful payment
+    // Check if recipient exists and belongs to the user
+    const recipient = await Recipient.findOne({ _id: recipientId, user_id: id });
+    if (!recipient) {
+      return res.status(404).json({
+        success: false,
+        message: 'Recipient not found or does not belong to user'
+      });
+    }
+
+    // Check if payment is already completed for this recipient
+    if (recipient.paymentCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment already completed for this recipient'
+      });
+    }
+
+    // Check if there's already a pending or succeeded payment for this recipient
     const existingPayment = await Payment.findOne({
-      userId: id,
-      status: 'succeeded'
+      recipientId: recipientId,
+      status: { $in: ['pending', 'succeeded'] }
     });
 
     if (existingPayment) {
       return res.status(400).json({
         success: false,
-        message: 'Payment already completed for this user'
+        message: 'Payment already exists for this recipient'
       });
     }
 
+    // Use provided amount and currency or defaults
+    const paymentAmount = amount || 17900;
+    const paymentCurrency = currency || 'gbp';
+
     // Create payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: 17900, // £179.00 in pence
-      currency: 'gbp',
+      amount: paymentAmount,
+      currency: paymentCurrency,
       payment_method: paymentMethod,
       confirm: true,
       return_url: process.env.STRIPE_RETURN_URL || 'http://localhost:3000/payment-success',
       metadata: {
         userId: id,
+        recipientId: recipientId,
+        recipientName: recipientName,
         service: 'afternote-one-time'
       },
-      description: 'Afternote Service - One-time charge'
+      description: `Afternote Service - One-time charge for ${recipientName}`
     });
 
     // Save payment record to database
     const payment = new Payment({
-      userId:id,
+      userId: id,
+      recipientId: recipientId,
+      recipientName: recipientName,
       stripePaymentIntentId: paymentIntent.id,
-      amount: 17900,
-      currency: 'gbp',
+      amount: paymentAmount,
+      currency: paymentCurrency,
       status: paymentIntent.status,
       paymentMethod,
-      description: 'Afternote Service - One-time charge',
+      description: `Afternote Service - One-time charge for ${recipientName}`,
       metadata: {
         service: 'afternote-one-time',
-        userEmail: user.email
+        userEmail: user.email,
+        recipientEmail: recipient.email
       }
     });
 
     await payment.save();
+    recipient.paymentCompleted = true;
+    recipient.paymentCompletedAt = new Date();
+    await recipient.save();
 
     res.status(200).json({
       success: true,
@@ -80,7 +110,9 @@ const createPaymentIntent = async (req, res) => {
         clientSecret: paymentIntent.client_secret,
         status: paymentIntent.status,
         amount: paymentIntent.amount,
-        currency: paymentIntent.currency
+        currency: paymentIntent.currency,
+        recipientId: recipientId,
+        recipientName: recipientName
       }
     });
 
@@ -145,6 +177,14 @@ const confirmPayment = async (req, res) => {
     }
     await payment.save();
 
+    // Mark recipient's payment as completed if payment succeeded
+    if (paymentIntent.status === 'succeeded' && payment.recipientId) {
+      await Recipient.findByIdAndUpdate(payment.recipientId, {
+        paymentCompleted: true,
+        paymentCompletedAt: new Date()
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: 'Payment confirmed successfully',
@@ -152,7 +192,10 @@ const confirmPayment = async (req, res) => {
         status: paymentIntent.status,
         amount: paymentIntent.amount,
         currency: paymentIntent.currency,
-        receiptUrl: payment.receiptUrl
+        receiptUrl: payment.receiptUrl,
+        recipientId: payment.recipientId,
+        recipientName: payment.recipientName,
+        paymentCompleted: paymentIntent.status === 'succeeded'
       }
     });
 
@@ -208,6 +251,9 @@ const getPaymentStatus = async (req, res) => {
         amount: payment.amount,
         currency: payment.currency,
         receiptUrl: payment.receiptUrl,
+        recipientId: payment.recipientId,
+        recipientName: payment.recipientName,
+        paymentCompleted: payment.status === 'succeeded',
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt
       }
@@ -301,7 +347,16 @@ const handlePaymentSucceeded = async (paymentIntent) => {
       payment.receiptUrl = paymentIntent.charges.data[0].receipt_url;
     }
     await payment.save();
-    console.log(`Payment ${paymentIntent.id} marked as succeeded`);
+    
+    // Mark recipient's payment as completed
+    if (payment.recipientId) {
+      await Recipient.findByIdAndUpdate(payment.recipientId, {
+        paymentCompleted: true,
+        paymentCompletedAt: new Date()
+      });
+    }
+    
+    console.log(`Payment ${paymentIntent.id} marked as succeeded for recipient ${payment.recipientName}`);
   }
 };
 

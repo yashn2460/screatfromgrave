@@ -6,7 +6,8 @@ const {
   getRecipient, 
   updateRecipient, 
   deleteRecipient,
-  updateVerificationStatus 
+  updateVerificationStatus,
+  getRecipientPaymentStatus
 } = require('../controllers/recipientController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 
@@ -208,6 +209,49 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *         description: Unauthorized
  */
 
+/**
+ * @swagger
+ * /api/recipients/{id}/payment-status:
+ *   get:
+ *     summary: Get recipient payment status
+ *     tags: [Recipients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Recipient payment status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [paid, unpaid, overdue]
+ *                 last_payment_date:
+ *                   type: string
+ *                   format: date-time
+ *                 next_payment_date:
+ *                   type: string
+ *                   format: date-time
+ *                 amount_due:
+ *                   type: number
+ *                 currency:
+ *                   type: string
+ *                 notes:
+ *                   type: string
+ *       404:
+ *         description: Recipient not found
+ *       401:
+ *         description: Unauthorized
+ */
+
 // Create a new recipient
 router.post('/', authenticateToken, createRecipient);
 
@@ -225,5 +269,8 @@ router.delete('/:id', authenticateToken, deleteRecipient);
 
 // Update verification status
 router.patch('/:id/verify', authenticateToken, updateVerificationStatus);
+
+// Get recipient payment status
+router.get('/:id/payment-status', authenticateToken, getRecipientPaymentStatus);
 
 module.exports = router; 

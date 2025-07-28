@@ -48,6 +48,13 @@ const recipientSchema = new mongoose.Schema({
     enum: ['pending', 'verified', 'failed'],
     default: 'pending'
   },
+  paymentCompleted: {
+    type: Boolean,
+    default: false
+  },
+  paymentCompletedAt: {
+    type: Date
+  },
   notes: String
 }, {
   timestamps: {

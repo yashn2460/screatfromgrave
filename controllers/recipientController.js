@@ -22,9 +22,22 @@ exports.createRecipient = async (req, res) => {
 exports.getRecipients = async (req, res) => {
   try {
     const recipients = await Recipient.find({ user_id: req.user.id });
+    
+    // Add payment status information to each recipient
+    // const recipientsWithPaymentStatus = recipients.map(recipient => ({
+    //   ...recipient.toObject(),
+    //   paymentStatus: {
+    //     completed: recipient.paymentCompleted,
+    //     completedAt: recipient.paymentCompletedAt
+    //   }
+    // }));
+    
     res.json(recipients);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
@@ -37,12 +50,30 @@ exports.getRecipient = async (req, res) => {
     });
     
     if (!recipient) {
-      return res.status(404).json({ message: 'Recipient not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Recipient not found' 
+      });
     }
     
-    res.json(recipient);
+    // Add payment status information
+    const recipientWithPaymentStatus = {
+      ...recipient.toObject(),
+      paymentStatus: {
+        completed: recipient.paymentCompleted,
+        completedAt: recipient.paymentCompletedAt
+      }
+    };
+    
+    res.json({
+      success: true,
+      data: recipientWithPaymentStatus
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
@@ -116,5 +147,38 @@ exports.updateVerificationStatus = async (req, res) => {
     res.json(recipient);
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+}; 
+
+// Get recipient payment status
+exports.getRecipientPaymentStatus = async (req, res) => {
+  try {
+    const recipient = await Recipient.findOne({
+      _id: req.params.id,
+      user_id: req.user.id
+    });
+    
+    if (!recipient) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Recipient not found' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        recipientId: recipient._id,
+        recipientName: recipient.full_name,
+        paymentCompleted: recipient.paymentCompleted,
+        paymentCompletedAt: recipient.paymentCompletedAt,
+        verification_status: recipient.verification_status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 }; 
