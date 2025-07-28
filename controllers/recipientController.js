@@ -1,4 +1,5 @@
 const Recipient = require('../models/Recipient');
+const Payment = require('../models/Payment');
 
 // Create a new recipient
 exports.createRecipient = async (req, res) => {
@@ -119,6 +120,8 @@ exports.deleteRecipient = async (req, res) => {
     }
     
     await Recipient.deleteOne({ _id: req.params.id });
+    await Payment.deleteOne({ recipientId: req.params.id });
+
     res.json({ message: 'Recipient deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
