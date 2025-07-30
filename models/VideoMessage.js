@@ -34,10 +34,10 @@ const videoMessageSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  encryption_key: {
-    type: String,
-    required: true
-  },
+  // encryption_key: {
+  //   type: String,
+  //   required: true
+  // },
   recipient_ids: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
