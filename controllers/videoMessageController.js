@@ -28,8 +28,8 @@ exports.createVideoMessage = async (req, res) => {
           try {
             recipient_ids = JSON.parse(req.body.recipient_ids);
           } catch (e) {
-            // If it's not a JSON string, treat it as a single value
-            recipient_ids = [req.body.recipient_ids];
+            // If it's not a JSON string, treat it as a comma-separated string
+            recipient_ids = req.body.recipient_ids.split(",").map(id => id.trim());
           }
         }
 
